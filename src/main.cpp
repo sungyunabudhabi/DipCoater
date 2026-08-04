@@ -2,6 +2,8 @@
 #include "movements.h"
 #include "operations.h"
 #include "webinterface.h"
+#include "dispenser.h"
+#include <ESP32Servo.h>
 
 // Dedicate a core for WIFI processing, and another for motor control and sensors.
 
@@ -16,26 +18,10 @@ void setup() {
   initMotors();
   setupwifi();
   setupWebServer();
+  startDispenserTask();
   startMotorTask();
 
   Serial.println("Setup complete");
-
-  
-
-  /*Serial.println("Initializing Dip Coater...");
-  initMotors();
-  
-  enablemotor();
-
-  turnoff();
-
-  dipSolution1(1, 1, 600);
-
-  turnoff();
-
-  Serial.println("Disabling Motors...");
-  disablemotor();
-  */
 }
 
 void loop() {

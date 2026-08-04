@@ -10,5 +10,6 @@ void setupwifi();
 void setupWebServer();
 void handleWebServer();   // call every loop() iteration
 void startMotorTask();    // call once from setup()
+void startDispenserTask(); // call once from setup()
 
 #endif

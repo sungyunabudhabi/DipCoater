@@ -27,6 +27,7 @@ void movehoriz(float mm);
 void movetohoriz(float pos);
 void movevert(float mm);
 void movetovert(float pos);
+void movedispense();
 void homehoriz();
 void homevert();
 void dryvert();

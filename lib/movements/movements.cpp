@@ -6,10 +6,12 @@
 
 volatile bool abortMotion = false;
 
-const uint8_t HORIZ_STEP_PIN = 13;
-const uint8_t HORIZ_DIR_PIN = 12;
-const uint8_t VERT_STEP_PIN = 14;
-const uint8_t VERT_DIR_PIN = 27;
+const uint8_t HORIZ_STEP_PIN = 14;
+const uint8_t HORIZ_DIR_PIN = 27;
+const uint8_t VERT_STEP_PIN = 26;
+const uint8_t VERT_DIR_PIN = 25;
+const uint8_t DISPENSE_STEP_PIN = 13;
+const uint8_t DISPENSE_DIR_PIN = 12;
 const uint8_t MICROSTEPS = 16;
 const uint8_t HORIZ_DIAG_PIN = 33;
 const uint8_t VERT_DIAG_PIN = 32;
@@ -18,8 +20,10 @@ const uint8_t VERT_DIAG_PIN = 32;
 
 TMC2209 horizmotor;
 TMC2209 vertmotor;
+TMC2209 dispensemotor;
 FastAccelStepper *horizstepper = NULL;
 FastAccelStepper *vertstepper = NULL;
+FastAccelStepper *dispensestepper = NULL;
 FastAccelStepperEngine engine = FastAccelStepperEngine();
 
 int DEFAULT_SPEED = 32000;
@@ -42,6 +46,7 @@ void initMotors() {
 
     horizmotor.setup(Serial2, 115200, TMC2209::SERIAL_ADDRESS_1, 16, 17);       // assign the address
     vertmotor.setup(Serial2, 115200, TMC2209::SERIAL_ADDRESS_0, 16, 17);
+    dispensemotor.setup(Serial2, 115200, TMC2209::SERIAL_ADDRESS_2, 16, 17);
 
     delay(100);
 
@@ -75,13 +80,17 @@ void initMotors() {
     vertmotor.setCoolStepDurationThreshold(0xFFFFF);
     vertmotor.enableInverseMotorDirection();
 
+    dispensemotor.setMicrostepsPerStep(MICROSTEPS);
+    dispensemotor.setRunCurrent(80);
+
     // FastAccelStepper Initialization
     engine.init();
 
     horizstepper = engine.stepperConnectToPin(HORIZ_STEP_PIN);
     vertstepper = engine.stepperConnectToPin(VERT_STEP_PIN);
+    dispensestepper = engine.stepperConnectToPin(DISPENSE_STEP_PIN);
 
-    if (horizstepper == NULL || vertstepper == NULL) {
+    if (horizstepper == NULL || vertstepper == NULL || dispensestepper == NULL) {
     Serial.println("Error: Failed to initialize stepper! Check pin assignment.");
     while(1); // Halt execution to prevent crashing
 }
@@ -97,6 +106,13 @@ void initMotors() {
         vertstepper->setAcceleration(DEFAULT_ACCELERATION);
         vertstepper->setCurrentPosition(0);
     } 
+
+if (dispensestepper)    {
+        dispensestepper->setDirectionPin(DISPENSE_DIR_PIN);
+        dispensestepper->setAcceleration(DEFAULT_ACCELERATION);
+        dispensestepper->setCurrentPosition(0);
+    }
+
     turnoff();
 }
 
@@ -109,6 +125,7 @@ void enablemotor() {
 void disablemotor() {
     horizmotor.disable();
     vertmotor.disable();
+    dispensemotor.disable();
 }
 
 // Functions to move the motors
@@ -160,6 +177,33 @@ void movetovert(float pos) {
     }
 }
 
+// Function to move the dispensing motor
+void movedispense() {
+    dispensemotor.enable();
+    dispensestepper->setSpeedInHz(3200);
+    // 1.5 rotations per the old calculations - change as needed
+    // x rotations * 200 steps per rotation * 16 microsteps per step
+    dispensestepper->move((int32_t)(1.5f * 200.0f * (float)MICROSTEPS));
+    while (dispensestepper->isRunning()) {
+        if (abortMotion) {
+            dispensestepper->forceStopAndNewPosition(dispensestepper->getCurrentPosition());
+            dispensemotor.disable();
+            return;
+        }
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+    dispensestepper->move((int32_t)(-1.5f * 200.0f * (float)MICROSTEPS));
+    while (dispensestepper->isRunning()) {
+        if (abortMotion) {
+            dispensestepper->forceStopAndNewPosition(dispensestepper->getCurrentPosition());
+            dispensemotor.disable();
+            return;
+        }
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+    dispensemotor.disable();
+}
+
 // Functions to home the motors to 0
 void homehoriz()    {
     horizstepper->setSpeedInHz(DEFAULT_SPEED);
@@ -188,7 +232,7 @@ void homevert() {
 // Function to move substrate just above the beaker
 void dryvert() {
     vertstepper->setSpeedInHz(DEFAULT_SPEED);
-    vertstepper->moveTo(-150 * 200 * MICROSTEPS / 2);
+    vertstepper->moveTo(-200 * 200 * MICROSTEPS / 2);       // Move 200mm from the top. Adjust as needed.
     while (vertstepper->isRunning()) {
         if (abortMotion) {
             vertstepper->forceStopAndNewPosition(vertstepper->getCurrentPosition());
