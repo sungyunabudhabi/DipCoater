@@ -75,7 +75,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     </tr>
     </table>
 
-  <label>Withdrawal speed (mm/min)</label>
+  <label>Withdrawal speed (1 - 1000 mm/min)</label>
   <input type="number" id="mmpermin" step="1" min="1" value="600">
 
   <label>Number of cycles</label>
@@ -156,6 +156,8 @@ static void handleStart() {
     pendingParams.drytime3  = server.arg("drytime3").toFloat();
     pendingParams.cycles    = server.arg("cycles").toInt();
     pendingParams.numsub    = server.arg("numsub").toInt();
+    if (pendingParams.mmpermin < 1) pendingParams.mmpermin = 1;
+    if (pendingParams.mmpermin > 1000) pendingParams.mmpermin = 1000;
     if (pendingParams.cycles < 1) pendingParams.cycles = 1;
     if (pendingParams.numsub < 1) pendingParams.numsub = 1;
     if (pendingParams.numsub > 3) pendingParams.numsub = 3;
@@ -214,6 +216,8 @@ static void motorTask(void *param) {
 
             if (p.cycles > 0) {
                 enablemotor();
+                // Pump hexane out to fill the tube with hexane after previous trial
+                movedispense(1.0f);
                 //turnoff();
             }
             // *** EDIT THIS FOR THE ACTUAL DIPPING PROCESS ***

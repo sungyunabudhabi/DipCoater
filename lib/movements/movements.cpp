@@ -2,7 +2,9 @@
 #include <TMC2209.h>
 #include <FastAccelStepper.h>
 #include <esp_task_wdt.h>
+#include <ESP32Servo.h>
 #include "movements.h"
+#include "dispenser.h"
 
 volatile bool abortMotion = false;
 
@@ -113,6 +115,8 @@ if (dispensestepper)    {
         dispensestepper->setCurrentPosition(0);
     }
 
+    homeservo();
+
     turnoff();
 }
 
@@ -177,22 +181,13 @@ void movetovert(float pos) {
     }
 }
 
-// Function to move the dispensing motor
-void movedispense() {
+// Function to move the dispensing motor (in rotations, positive is dispensing and negative is refilling)
+void movedispense(float rot) {
     dispensemotor.enable();
     dispensestepper->setSpeedInHz(3200);
     // 1.5 rotations per the old calculations - change as needed
     // x rotations * 200 steps per rotation * 16 microsteps per step
-    dispensestepper->move((int32_t)(1.5f * 200.0f * (float)MICROSTEPS));
-    while (dispensestepper->isRunning()) {
-        if (abortMotion) {
-            dispensestepper->forceStopAndNewPosition(dispensestepper->getCurrentPosition());
-            dispensemotor.disable();
-            return;
-        }
-        vTaskDelay(10 / portTICK_PERIOD_MS);
-    }
-    dispensestepper->move((int32_t)(-1.5f * 200.0f * (float)MICROSTEPS));
+    dispensestepper->move((int32_t)(rot * 200.0f * (float)MICROSTEPS));
     while (dispensestepper->isRunning()) {
         if (abortMotion) {
             dispensestepper->forceStopAndNewPosition(dispensestepper->getCurrentPosition());
@@ -232,7 +227,7 @@ void homevert() {
 // Function to move substrate just above the beaker
 void dryvert() {
     vertstepper->setSpeedInHz(DEFAULT_SPEED);
-    vertstepper->moveTo(-200 * 200 * MICROSTEPS / 2);       // Move 200mm from the top. Adjust as needed.
+    vertstepper->moveTo(-190 * 200 * MICROSTEPS / 2);       // Move 200mm from the top. Adjust as needed.
     while (vertstepper->isRunning()) {
         if (abortMotion) {
             vertstepper->forceStopAndNewPosition(vertstepper->getCurrentPosition());
@@ -268,11 +263,14 @@ void estop() {
     vertstepper->forceStopAndNewPosition(vertstepper->getCurrentPosition());
     horizstepper->forceStopAndNewPosition(horizstepper->getCurrentPosition());
 
+    homeservo();
     // hardcoded dryvert(); the function does not work because of the abortMotion flag.
     vertstepper->setSpeedInHz(DEFAULT_SPEED);
-    vertstepper->moveTo(-150 * 200 * MICROSTEPS / 2);   // target = -240000
-    while (vertstepper->isRunning() == true) {
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+    if (vertstepper->getCurrentPosition() < -50 * 200 * MICROSTEPS / 2) {
+        vertstepper->moveTo(-50 * 200 * MICROSTEPS / 2);
+        while (vertstepper->isRunning() == true) {
+            vTaskDelay(10 / portTICK_PERIOD_MS);
+        }
     }
 
     turnoff();

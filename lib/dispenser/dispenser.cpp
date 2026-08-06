@@ -9,7 +9,7 @@
 
 Servo servo;
 
-const int angle[3] = {70, 110, 180};
+const int angle[3] = {55, 90, 135};
 
 void dispense (int numsub) {
     ESP32PWM::allocateTimer(0);
@@ -21,7 +21,7 @@ void dispense (int numsub) {
         servo.write(angle[i]);
         delay(1000); // Wait for the servo to reach the position
         if (abortMotion) return;
-        movedispense();
+        movedispense(1.5f);
         if (abortMotion) return;
         delay(1000); // Wait for the dispenser to complete its movement
         if (abortMotion) return;
@@ -29,4 +29,18 @@ void dispense (int numsub) {
     servo.write(0); // Move to the default position
     delay(1000); // Wait for the servo to reach the default position
     servo.detach(); // Detach the servo from the pin
+}
+
+void refill () {
+    Serial.println("refill() running");
+    movedispense(1.0f);
+}
+
+void homeservo() {
+    ESP32PWM::allocateTimer(0);
+    servo.setPeriodHertz(50); // Standard 50Hz PWM
+    servo.attach(SERVO_PIN, 500, 2400);
+    servo.write(0);
+    delay(1000);
+    servo.detach();
 }

@@ -7,5 +7,7 @@
 extern Servo servo;
 
 void dispense (int numsub);
+void homeservo();
+void refill();
 
 #endif
