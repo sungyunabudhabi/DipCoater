@@ -6,7 +6,8 @@ float beaker1position = 50.0;
 float beaker2position = 100.0;
 float beaker3position = 150.0;
 float beaker4position = 200.0;
-float dipDistance = 253.0;          // Adjust after making the overhang
+float dipDistance = 252.0;          // Adjust after making the overhang. To the bottom of the beaker: 253.0
+                                    // 1. adjusted from 253 to 252mm, since grippers tend to be submerged in solution.
 
 void dipSolution1(float diptime, float drytime, float mmpermin) {
     movetohoriz(beaker1position);
@@ -30,6 +31,8 @@ void dipSolution2(float diptime, float drytime) {
     if (abortMotion) return;
     wait(diptime);
     if (abortMotion) return;
+    withdraw(100);              // Set speed at 100mm/min. Default speed might be too fast
+    if (abortMotion) return;
     dryvert();
     if (abortMotion) return;
     wait(drytime);
@@ -42,6 +45,8 @@ void dipSolution3(float diptime, float drytime) {
     movetovert(-dipDistance);
     if (abortMotion) return;
     wait(diptime);
+    if (abortMotion) return;
+    withdraw(100);              // Set speed at 100mm/min. Default speed might be too fast
     if (abortMotion) return;
     dryvert();
     if (abortMotion) return;

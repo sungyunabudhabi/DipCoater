@@ -12,7 +12,7 @@ const uint8_t VERT_STEP_PIN = 26;
 const uint8_t VERT_DIR_PIN = 25;
 const uint8_t DISPENSE_STEP_PIN = 13;
 const uint8_t DISPENSE_DIR_PIN = 12;
-const uint8_t MICROSTEPS = 16;
+uint8_t MICROSTEPS = 16;                        // make volatile to allow changing microsteps for lower speeds
 const uint8_t HORIZ_DIAG_PIN = 33;
 const uint8_t VERT_DIAG_PIN = 32;
 //const uint8_t HORIZ_ENDSTOP_PIN = 33;
@@ -244,6 +244,11 @@ void dryvert() {
 
 // Function to withdraw the substrate from solution at a given rate
 void withdraw(float mmpermin) {
+    if (mmpermin <= 100) {MICROSTEPS = 128;}
+    else if (mmpermin <= 20) {MICROSTEPS = 256;}
+    vertmotor.setMicrostepsPerStep(MICROSTEPS);
+    vertstepper->setAcceleration(1000000);          // This large number reaches set speed instantly
+    // mmpermin / 60 = mmpersec, * 200 steps per rev * MICROSTEPS / 2mm linear motion per rev = steps per sec
     vertstepper->setAcceleration(1000000);          // This large number makes it almost instant
     vertstepper->setSpeedInHz((int32_t)(mmpermin/60.0f * 200.0f * (float)MICROSTEPS / 2.0f));    // set speed in Hz
     vertstepper->move(15 * 200 * MICROSTEPS / 2);                       // move 15mm
@@ -255,6 +260,9 @@ void withdraw(float mmpermin) {
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
     vertstepper->setAcceleration(DEFAULT_ACCELERATION); 
+    MICROSTEPS = 16;      // Reset microsteps to default
+    vertmotor.setMicrostepsPerStep(MICROSTEPS);
+
 }
 
 void wait(float sec) {

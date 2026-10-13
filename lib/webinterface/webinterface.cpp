@@ -159,6 +159,9 @@ static void handleStart() {
     if (pendingParams.cycles < 1) pendingParams.cycles = 1;
     if (pendingParams.numsub < 1) pendingParams.numsub = 1;
     if (pendingParams.numsub > 3) pendingParams.numsub = 3;
+    if (pendingParams.mmpermin <= 0) pendingParams.mmpermin = 0.1;
+    if (pendingParams.mmpermin > 1000) pendingParams.mmpermin = 1000;
+
 
     estopRequested = false;
     abortMotion = false;
