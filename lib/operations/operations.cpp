@@ -2,6 +2,8 @@
 #include "operations.h"
 #include "movements.h"
 
+// These are the default positions (in mm) of the beakers and the end position of the dipping arm,
+// relative to the initial positions of the two motors.
 float beaker1position = 50.0;
 float beaker2position = 100.0;
 float beaker3position = 150.0;
@@ -17,7 +19,7 @@ void dipSolution1(float diptime, float drytime, float mmpermin) {
     if (abortMotion) return;
     withdraw(mmpermin);
     if (abortMotion) return;
-    dryvert();                 // Adjust the position once distances are calibrated.
+    dryvert();
     if (abortMotion) return;
     wait(drytime);
     if (abortMotion) return;

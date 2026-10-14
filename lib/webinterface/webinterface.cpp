@@ -7,19 +7,19 @@
 #include "operations.h"
 #include "dispenser.h"
 
-///*
+// Define WiFi related parameters
 #define AP_SSID "DipCoater"
 #define AP_PW "michaelsohn"
 #define mdns "dipcoater"
 #define WIFI_CORE 0
 #define TASK_CORE 1
-//*/
 
 // Establish the dispenser task and semaphore
 static TaskHandle_t dispenserTaskHandle = NULL;
 static SemaphoreHandle_t dispenseDoneSem = NULL;
 static volatile int dispenserNumSubstrates = 0;
 
+// Establish user input variables
 struct CycleParams {
     float diptime1, drytime1, mmpermin;
     float diptime2, drytime2;
@@ -28,12 +28,15 @@ struct CycleParams {
     int numsub;
 };
 
+// Establish status flags (used for preventing commands from overlapping each other)
 static volatile bool startRequested = false;
+static volatile bool refillRequested = false;
 static volatile bool estopRequested = false;
 static volatile bool systemBusy = false;
 static CycleParams pendingParams;
 static TaskHandle_t motorTaskHandle = NULL;
 
+// HTML and JS Web Interface code
 const char INDEX_HTML[] PROGMEM = R"rawliteral(
 <!DOCTYPE html>
 <html>
@@ -53,6 +56,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     #startBtn { background: #2e7d32; color: white; }
     #startBtn:disabled { background: #999; }
     #estopBtn { background: #c62828; color: white; }
+    #refillBtn { background: #1565c0; color: white; }
+    #refillBtn:disabled { background: #999; }   
     #status { margin-top: 16px; font-size: 0.9em; color: #555; text-align: center; }
   </style>
 </head>
@@ -90,6 +95,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
   <tr>________________________________________________</tr>
 
   <button id="startBtn" onclick="startCycle()">Start</button>
+  <button id="refillBtn" onclick="refillSyringe()">Refill Syringe</button>
   <button id="estopBtn" onclick="estop()">EMERGENCY STOP</button>
 
   <div id="status">Idle</div>
@@ -111,11 +117,17 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
         status.innerText = await res.text();
         poll();
     }
+    async function refillSyringe() {
+        const res = await fetch('/refill');
+        status.innerText = await res.text();
+        poll();
+    }
     async function poll() {
         const res = await fetch('/status');
         const data = await res.json();
         status.innerText = data.busy ? 'Running...' : 'Idle';
         startBtn.disabled = data.busy;
+        refillBtn.disabled = data.busy;
         if (data.busy) setTimeout(poll, 1000);
     }
     poll();
@@ -124,6 +136,7 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
 </html>
 )rawliteral";
 
+// Setup Server
 WebServer server(80);
 
 // This handles the root page
@@ -131,12 +144,16 @@ static void handleRoot() {
     server.send(200, "text/html", INDEX_HTML);
 }
 
-// This gets the input from the web interface
+// This gets the input from the web interface and stores it in the local variable
+// Also starts the dipcoating process by setting startRequested = true, 
+// triggering the motorTask() loop to execute the "if (startRequested)" statement
+// This function is called when the "Start" button is pressed in the web UI.
 static void handleStart() {
     if (systemBusy) {
         server.send(409, "text/plain", "Busy: a cycle is already running");
         return;
     }
+    // Required variables; throw error if any of them is empty
     const char* required[] = {"diptime1","drytime1","mmpermin",
                                "diptime2","drytime2",
                                "diptime3","drytime3","cycles","numsub"};
@@ -147,6 +164,7 @@ static void handleStart() {
         }
     }
 
+    // Convert incoming string to float, and store in pendingParams (declared above)
     pendingParams.diptime1  = server.arg("diptime1").toFloat();
     pendingParams.drytime1  = server.arg("drytime1").toFloat();
     pendingParams.mmpermin  = server.arg("mmpermin").toFloat();
@@ -162,10 +180,27 @@ static void handleStart() {
     if (pendingParams.numsub < 1) pendingParams.numsub = 1;
     if (pendingParams.numsub > 3) pendingParams.numsub = 3;
 
+    // Change status flag to trigger the motorTask() loop to execute if(startRequested) statement
     estopRequested = false;
     abortMotion = false;
     startRequested = true;
     server.send(200, "text/plain", "Started");
+}
+
+// This triggers the refill cycle by setting refillRequested = true
+// This function is triggered by pressing the "Refill Syringe" button from the web UI
+static void handleRefill() {
+    Serial.println("refill requested");
+    if (systemBusy) {
+        server.send(409, "text/plain", "Busy: a cycle is already running");
+        return;
+    }
+    // Trigger refill by defining refillRequested = true, triggering motorTask() to execute
+    // the else if (refillRequested) statement
+    estopRequested = false;
+    abortMotion = false;
+    refillRequested = true;
+    server.send(200, "text/plain", "Refilling");
 }
 
 // This sets the emergency stop flag
@@ -184,16 +219,19 @@ static void handleStatus() {
 }
 
 // This sets up the web server
+// Commands received from web UI through buttons executes the trigger functions above
 void setupWebServer() {
     server.on("/", handleRoot);
     server.on("/start", handleStart);
+    server.on("/refill", handleRefill);
     server.on("/estop", handleEstop);
     server.on("/status", handleStatus);
     server.begin();
     Serial.println("Web server started");
 }
 
-// This allows people to access the link.
+// This allows people to access the server
+// Must be run on a loop to receive new clients
 void handleWebServer() {
     server.handleClient();
 }
@@ -202,18 +240,22 @@ void handleWebServer() {
 // *** EDIT THIS FOR THE ACTUAL DIPPING PROCESS ***
 static void motorTask(void *param) {
     for (;;) {
+        // Execute emergency stop
         if (abortMotion) {
             estop();
             xQueueReset(dispenseDoneSem);
             estopRequested = false;
             systemBusy = false;
         }
+        // Start the dipcoating process
         else if (startRequested) {
+            // Make sure systenBusy is set to true, so that other commands do not override this command
             startRequested = false;
             systemBusy = true;
 
             CycleParams p = pendingParams;
 
+            // If statement that is always true for valid Cycle input (runs in the beginning of every start command)
             if (p.cycles > 0) {
                 enablemotor();
                 // Pump hexane out to fill the tube with hexane after previous trial
@@ -224,7 +266,7 @@ static void motorTask(void *param) {
             for (int i = 0; i < p.cycles && !estopRequested; i++) {
                 // Write the entire code sequence for the dipcoating cycle
                 dipSolution1(p.diptime1, p.drytime1, p.mmpermin);
-                if (estopRequested) break;
+                if (estopRequested) break;          // Constantly check for the emergency stop trigger in between funcitons
                 dipSolution2(p.diptime2, p.drytime2);
                 if (estopRequested) break;
 
@@ -246,12 +288,19 @@ static void motorTask(void *param) {
 
                 if (estopRequested) break;
             }
-
+            // If the process ended normally without an emergency stop, slowly home and disable all motors
             if (!estopRequested) {
                 turnoff();
                 disablemotor();
             }
+            systemBusy = false;
+        }
 
+        // Refill logic
+        else if (refillRequested) {
+            refillRequested = false;
+            systemBusy = true;
+            refill();
             systemBusy = false;
         }
         vTaskDelay(50 / portTICK_PERIOD_MS);
@@ -268,7 +317,7 @@ static void dispenserTask(void *param) {
     }
 }
 
-// Create FreeRTOS task for motor
+// Create FreeRTOS task for motor (only create the task when this funciton is called)
 void startMotorTask() {
     xTaskCreatePinnedToCore(
         motorTask,
