@@ -8,7 +8,9 @@ float beaker1position = 50.0;
 float beaker2position = 100.0;
 float beaker3position = 150.0;
 float beaker4position = 200.0;
-float dipDistance = 253.0;          // Adjust after making the overhang
+float dipDistance = 252.0;          // Adjust after making the overhang. default: 253.0
+float solution2mmpermin = 100.0;
+float solution3mmpermin = 100.0;
 
 void dipSolution1(float diptime, float drytime, float mmpermin) {
     movetohoriz(beaker1position);
@@ -32,6 +34,8 @@ void dipSolution2(float diptime, float drytime) {
     if (abortMotion) return;
     wait(diptime);
     if (abortMotion) return;
+    withdraw(solution2mmpermin);
+    if (abortMotion) return;
     dryvert();
     if (abortMotion) return;
     wait(drytime);
@@ -44,6 +48,8 @@ void dipSolution3(float diptime, float drytime) {
     movetovert(-dipDistance);
     if (abortMotion) return;
     wait(diptime);
+    if (abortMotion) return;
+    withdraw(solution3mmpermin);
     if (abortMotion) return;
     dryvert();
     if (abortMotion) return;

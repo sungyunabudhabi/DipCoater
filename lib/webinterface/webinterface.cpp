@@ -80,8 +80,8 @@ const char INDEX_HTML[] PROGMEM = R"rawliteral(
     </tr>
     </table>
 
-  <label>Withdrawal speed (1 - 1000 mm/min)</label>
-  <input type="number" id="mmpermin" step="1" min="1" value="600">
+  <label>Withdrawal speed (0.1 - 1000 mm/min)</label>
+  <input type="number" id="mmpermin" step="0.1" min="0.1" value="600">
 
   <label>Number of cycles</label>
   <input type="number" id="cycles" step="1" min="1" value="1">
@@ -174,7 +174,7 @@ static void handleStart() {
     pendingParams.drytime3  = server.arg("drytime3").toFloat();
     pendingParams.cycles    = server.arg("cycles").toInt();
     pendingParams.numsub    = server.arg("numsub").toInt();
-    if (pendingParams.mmpermin < 1) pendingParams.mmpermin = 1;
+    if (pendingParams.mmpermin < 0.1) pendingParams.mmpermin = 0.1;
     if (pendingParams.mmpermin > 1000) pendingParams.mmpermin = 1000;
     if (pendingParams.cycles < 1) pendingParams.cycles = 1;
     if (pendingParams.numsub < 1) pendingParams.numsub = 1;

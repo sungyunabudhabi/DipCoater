@@ -17,7 +17,7 @@ const uint8_t DISPENSE_STEP_PIN = 13;
 const uint8_t DISPENSE_DIR_PIN = 12;
 const uint8_t HORIZ_DIAG_PIN = 33;
 const uint8_t VERT_DIAG_PIN = 32;
-const uint8_t MICROSTEPS = 16;
+int MICROSTEPS = 16;
 //const uint8_t HORIZ_ENDSTOP_PIN = 33;
 //const uint8_t VERT_ENDSTOP_PIN = 32;
 
